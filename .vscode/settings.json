@@ -4,6 +4,7 @@
         "KEYID",
         "killall",
         "pinentry",
+        "psql",
         "signingkey",
         "Sonoma",
         "xclip"

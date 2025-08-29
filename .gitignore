@@ -32,8 +32,8 @@ go.work.sum
 Dockerfile
 
 # Editor/IDE
-# .idea/
-# .vscode/
+.idea/
+.vscode/
 
 # Keys
 secrets/
