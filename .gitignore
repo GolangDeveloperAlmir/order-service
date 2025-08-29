@@ -24,8 +24,12 @@ profile.cov
 go.work
 go.work.sum
 
-# env file
+# Ignore .env file
 .env
+
+# Ignore Docker-related files
+.dockerignore
+Dockerfile
 
 # Editor/IDE
 # .idea/
