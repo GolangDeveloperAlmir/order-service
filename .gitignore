@@ -34,3 +34,6 @@ Dockerfile
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Keys
+secrets/
