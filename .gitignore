@@ -27,10 +27,6 @@ go.work.sum
 # Ignore .env file
 .env
 
-# Ignore Docker-related files
-.dockerignore
-Dockerfile
-
 # Editor/IDE
 .idea/
 .vscode/
