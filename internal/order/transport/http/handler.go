@@ -3,6 +3,8 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -39,6 +41,19 @@ func NewHandler(svc Service, logger *log.Logger, idem *idempotency.Store, sg *sa
 	return &Handler{svc: svc, log: logger, idem: idem, sg: sg}
 }
 
+func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dst); err != nil {
+		return err
+	}
+	if err := dec.Decode(new(struct{})); err != io.EOF {
+		return errors.New("body must contain only one JSON object")
+	}
+	return nil
+}
+
 type createReq struct {
 	CustomerID string        `json:"customer_id"`
 	Currency   string        `json:"currency"`
@@ -47,11 +62,8 @@ type createReq struct {
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var req createReq
-	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		h.log.Error("failed to decode json: %v", log.Err(err))
+	if err := decodeJSON(w, r, &req); err != nil {
+		h.log.Error("failed to decode json", log.Err(err))
 		respond.Error(w, http.StatusBadRequest, "invalid json")
 		return
 	}
@@ -161,11 +173,8 @@ func (h *Handler) PatchStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req patchStatusReq
-	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil || req.Status == "" {
-		h.log.Error("failed to decode body: %v", log.Err(err))
+	if err := decodeJSON(w, r, &req); err != nil || req.Status == "" {
+		h.log.Error("failed to decode body", log.Err(err))
 		respond.Error(w, http.StatusBadRequest, "invalid body")
 		return
 	}
