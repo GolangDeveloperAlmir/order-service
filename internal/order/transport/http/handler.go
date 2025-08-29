@@ -2,19 +2,22 @@ package http
 
 import (
 	"context"
-	"encoding/json"
-	"github.com/GolangDeveloperAlmir/order-service/internal/order/domain"
-	ordersvc "github.com/GolangDeveloperAlmir/order-service/internal/order/service"
-	"github.com/GolangDeveloperAlmir/order-service/internal/platform/idempotency"
-	"github.com/GolangDeveloperAlmir/order-service/internal/platform/saga"
-	"github.com/GolangDeveloperAlmir/order-service/pkg/respond"
-	"github.com/google/uuid"
 	"net/http"
+	"regexp"
 	"strconv"
 	"time"
 
+	"github.com/GolangDeveloperAlmir/order-service/internal/order/domain"
+	ordersvc "github.com/GolangDeveloperAlmir/order-service/internal/order/service"
+	"github.com/GolangDeveloperAlmir/order-service/internal/platform/idempotency"
 	"github.com/GolangDeveloperAlmir/order-service/internal/platform/log"
+	"github.com/GolangDeveloperAlmir/order-service/internal/platform/saga"
+	"github.com/GolangDeveloperAlmir/order-service/pkg/request"
+	"github.com/GolangDeveloperAlmir/order-service/pkg/respond"
+	"github.com/google/uuid"
 )
+
+var currencyRe = regexp.MustCompile("^[A-Z]{3}$")
 
 type Service interface {
 	Create(ctx context.Context, customerID uuid.UUID, currency string, items []domain.Item) (*domain.Order, error)
@@ -42,9 +45,13 @@ type createReq struct {
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var req createReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := request.DecodeJSON(w, r, &req); err != nil {
 		h.log.Error("failed to decode json: %v", log.Err(err))
 		respond.Error(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	if !currencyRe.MatchString(req.Currency) {
+		respond.Error(w, http.StatusBadRequest, "invalid currency")
 		return
 	}
 	cid, err := uuid.Parse(req.CustomerID)
@@ -118,8 +125,11 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	cursor := r.URL.Query().Get("cursor")
 	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
-	if err != nil {
-		h.log.Error("failed to parse limit: %v", log.Err(err))
+	if err != nil || limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
@@ -146,7 +156,7 @@ func (h *Handler) PatchStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req patchStatusReq
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Status == "" {
+	if err := request.DecodeJSON(w, r, &req); err != nil || req.Status == "" {
 		h.log.Error("failed to decode body: %v", log.Err(err))
 		respond.Error(w, http.StatusBadRequest, "invalid body")
 		return
