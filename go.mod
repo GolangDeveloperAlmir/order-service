@@ -1,6 +1,6 @@
 module github.com/GolangDeveloperAlmir/order-service
 
-go 1.25.0
+go 1.23.0
 
 require (
 	github.com/testcontainers/testcontainers-go v0.38.0

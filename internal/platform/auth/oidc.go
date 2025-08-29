@@ -84,13 +84,13 @@ func bearer(h string) string {
 }
 
 func hasScope(claims map[string]any, want string) bool {
-	if v, ok := claims["scope"].(string); ok {
-		for s := range strings.SplitSeq(v, " ") {
-			if s == want {
-				return true
-			}
-		}
-	}
+        if v, ok := claims["scope"].(string); ok {
+                for _, s := range strings.Split(v, " ") {
+                        if s == want {
+                                return true
+                        }
+                }
+        }
 	if arr, ok := claims["scp"].([]any); ok {
 		for _, s := range arr {
 			if sstr, ok := s.(string); ok && sstr == want {
