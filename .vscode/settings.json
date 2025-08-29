@@ -1,10 +1,19 @@
 {
     "cSpell.words": [
+        "distroless",
+        "GOARCH",
         "gpgsign",
+        "healthcheck",
+        "isready",
         "KEYID",
         "killall",
+        "nonroot",
+        "overprovisioned",
+        "pgdata",
         "pinentry",
         "psql",
+        "redpanda",
+        "redpandadata",
         "signingkey",
         "Sonoma",
         "xclip"
