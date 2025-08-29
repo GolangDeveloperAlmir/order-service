@@ -8,7 +8,7 @@ import (
 	"os"
 	"testing"
 
-	pgrepo "github.com/GolangDeveloperAlmir/order-service/order-service/internal/order/repository/postgres"
+	pgrepo "github.com/GolangDeveloperAlmir/order-service/internal/order/repository/postgres"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"

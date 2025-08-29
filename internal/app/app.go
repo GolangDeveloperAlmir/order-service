@@ -18,6 +18,7 @@ import (
 	"github.com/GolangDeveloperAlmir/order-service/internal/platform/observability"
 	"github.com/GolangDeveloperAlmir/order-service/internal/platform/outbox"
 	"github.com/GolangDeveloperAlmir/order-service/internal/platform/saga"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	httpstd "net/http"
 	pprof "net/http/pprof"
 	"strings"
@@ -25,9 +26,25 @@ import (
 )
 
 func Run(ctx context.Context, cfg *config.Config, logger *log.Logger) error {
-	observability.InitMetrics()
-	shutdownTracer := observability.InitTracing(ctx, logger)
-	defer shutdownTracer()
+	metricsShutdown, err := observability.InitMetrics(ctx, "order-service", logger)
+	if err != nil {
+		return fmt.Errorf("metrics init: %w", err)
+	}
+	defer func() {
+		if err := metricsShutdown(context.Background()); err != nil {
+			logger.Error("metrics shutdown", log.Err(err))
+		}
+	}()
+
+	tracerShutdown, err := observability.InitTracing(ctx, "order-service", logger)
+	if err != nil {
+		return fmt.Errorf("tracing init: %w", err)
+	}
+	defer func() {
+		if err := tracerShutdown(context.Background()); err != nil {
+			logger.Error("tracing shutdown", log.Err(err))
+		}
+	}()
 
 	pool, err := db.NewPostgresPool(ctx, cfg.DatabaseURL)
 	if err != nil {
@@ -37,7 +54,7 @@ func Run(ctx context.Context, cfg *config.Config, logger *log.Logger) error {
 
 	tx := db.NewTxManager(pool)
 	orderRepo := postgres.New(pool)
-	orderSvc := service.New(orderRepo, tx)
+	orderSvc := service.New(orderRepo, tx, logger)
 
 	idem := idempotency.NewStore(pool)
 
@@ -80,6 +97,7 @@ func Run(ctx context.Context, cfg *config.Config, logger *log.Logger) error {
 
 	api := http.NewHandler(orderSvc, logger, idem, sgMgr)
 	router := http.NewRouter(api, logger, http.WithAuth(authMW))
+	router = otelhttp.NewHandler(router, "http.api")
 
 	debugMux := httpstd.NewServeMux()
 	debugMux.Handle("/metrics", observability.Handler())
