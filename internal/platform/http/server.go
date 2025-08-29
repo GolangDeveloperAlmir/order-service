@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"net/http"
 	"time"
@@ -11,8 +12,10 @@ import (
 )
 
 type Server struct {
-	http *http.Server
-	log  *log.Logger
+	http     *http.Server
+	log      *log.Logger
+	certFile string
+	keyFile  string
 }
 
 func New(handler http.Handler, cfg *config.Config, logger *log.Logger) *Server {
@@ -23,16 +26,19 @@ func New(handler http.Handler, cfg *config.Config, logger *log.Logger) *Server {
 			ReadHeaderTimeout: cfg.ReadTimeout,
 			WriteTimeout:      cfg.WriteTimeout,
 			IdleTimeout:       cfg.IdleTimeout,
+			TLSConfig:         &tls.Config{MinVersion: tls.VersionTLS12},
 		},
-		log: logger,
+		log:      logger,
+		certFile: cfg.TLSCertFile,
+		keyFile:  cfg.TLSKeyFile,
 	}
 }
 
 func (s *Server) Run(ctx context.Context) error {
 	errCh := make(chan error, 1)
 	go func() {
-		s.log.Info("http server started", log.Str("addr", s.http.Addr))
-		if err := s.http.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		s.log.Info("https server started", log.Str("addr", s.http.Addr))
+		if err := s.http.ListenAndServeTLS(s.certFile, s.keyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
 		close(errCh)

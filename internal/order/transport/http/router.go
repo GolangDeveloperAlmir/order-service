@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/GolangDeveloperAlmir/order-service/internal/platform/log"
-	"github.com/GolangDeveloperAlmir/order-service/internal/platform/observability"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -38,7 +37,7 @@ func NewRouter(h *Handler, logger *log.Logger, opts ...RouterOpt) stdhttp.Handle
 	r.Use(mwZap(logger))
 	r.Use(rateLimit(10, 20)) // global default; per-endpoint is added below if needed
 
-	// Health & metrics
+	// Health
 	r.Get("/healthz", func(w stdhttp.ResponseWriter, r *stdhttp.Request) { w.WriteHeader(200) })
 	r.Get("/readyz", func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		if err := dbPing(r.Context()); err != nil {
@@ -47,7 +46,6 @@ func NewRouter(h *Handler, logger *log.Logger, opts ...RouterOpt) stdhttp.Handle
 		}
 		w.WriteHeader(200)
 	})
-	r.Handle("/metrics", observability.Handler())
 
 	// Spec
 	r.Get("/openapi.yaml", func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
