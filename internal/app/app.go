@@ -3,10 +3,21 @@ package app
 import (
 	"context"
 	"fmt"
-	"log"
-	"net/http"
-
 	"github.com/GolangDeveloperAlmir/order-service/internal/config"
+	"github.com/GolangDeveloperAlmir/order-service/internal/order/repository/postgres"
+	"github.com/GolangDeveloperAlmir/order-service/internal/order/service"
+	http "github.com/GolangDeveloperAlmir/order-service/internal/order/transport/http"
+	"github.com/GolangDeveloperAlmir/order-service/internal/platform/auth"
+	"github.com/GolangDeveloperAlmir/order-service/internal/platform/db"
+	server "github.com/GolangDeveloperAlmir/order-service/internal/platform/http"
+	"github.com/GolangDeveloperAlmir/order-service/internal/platform/idempotency"
+	"github.com/GolangDeveloperAlmir/order-service/internal/platform/kafka"
+	"github.com/GolangDeveloperAlmir/order-service/internal/platform/log"
+	"github.com/GolangDeveloperAlmir/order-service/internal/platform/observability"
+	"github.com/GolangDeveloperAlmir/order-service/internal/platform/outbox"
+	"github.com/GolangDeveloperAlmir/order-service/internal/platform/saga"
+	httpstd "net/http"
+	"strings"
 )
 
 func Run(ctx context.Context, cfg *config.Config, logger *log.Logger) error {
@@ -16,7 +27,6 @@ func Run(ctx context.Context, cfg *config.Config, logger *log.Logger) error {
 
 	pool, err := db.NewPostgresPool(ctx, cfg.DatabaseURL)
 	if err != nil {
-		logger.Error("failed to connect to db", "error", err)
 		return fmt.Errorf("db connect: %w", err)
 	}
 	defer pool.Close()
@@ -28,12 +38,16 @@ func Run(ctx context.Context, cfg *config.Config, logger *log.Logger) error {
 	idem := idempotency.NewStore(pool)
 
 	prod := kafka.NewProducer(cfg.KafkaBrokers, cfg.KafkaTopicOrders)
-	defer prod.Close()
+	defer func() {
+		if err := prod.Close(); err != nil {
+			logger.Error("failed to close kafka producer", log.Err(err))
+		}
+	}()
 
 	relay := outbox.New(pool, prod, cfg.OutboxInterval, cfg.OutboxBatch, logger)
 	go func() {
 		if err := relay.Run(ctx); err != nil {
-			logger.Error("outbox relay stopped", "error", err)
+			return
 		}
 	}()
 
@@ -41,11 +55,11 @@ func Run(ctx context.Context, cfg *config.Config, logger *log.Logger) error {
 	sgMgr := saga.NewManager(sgStore, logger)
 	go func() {
 		if err := sgMgr.RunPoller(ctx); err != nil {
-			logger.Errorf("failed to run poller: %v", err)
+			return
 		}
 	}()
 
-	var authMW func(http.Handler) http.Handler
+	var authMW func(httpstd.Handler) httpstd.Handler
 	if cfg.AuthEnabled {
 		auds := strings.Split(cfg.OIDCAudience, ",")
 		oidcMW, err := auth.NewOIDC(ctx, auth.OIDCConfig{

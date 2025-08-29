@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"github.com/GolangDeveloperAlmir/order-service/internal/app"
+	"github.com/GolangDeveloperAlmir/order-service/internal/platform/log"
 	"os/signal"
 	"syscall"
 	"time"
@@ -17,12 +19,12 @@ func main() {
 	logger := log.New(cfg.AppEnv)
 	defer func() {
 		if err := logger.Sync(); err != nil {
-			logger.Error("failed to sync logger", "error", err)
+			return
 		}
 	}()
 
 	if err := app.Run(ctx, cfg, logger); err != nil {
-		logger.Panic("failed to run application", "error", err)
+		return
 	}
 
 	time.Sleep(100 * time.Millisecond)
