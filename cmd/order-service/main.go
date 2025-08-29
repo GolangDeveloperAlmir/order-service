@@ -5,6 +5,8 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/GolangDeveloperAlmir/order-service/internal/config"
 )
 
 func main() {
