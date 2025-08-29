@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"crypto/tls"
+	"errors"
 	"fmt"
 	"github.com/GolangDeveloperAlmir/order-service/internal/config"
 	"github.com/GolangDeveloperAlmir/order-service/internal/order/repository/postgres"
@@ -17,7 +19,9 @@ import (
 	"github.com/GolangDeveloperAlmir/order-service/internal/platform/outbox"
 	"github.com/GolangDeveloperAlmir/order-service/internal/platform/saga"
 	httpstd "net/http"
+	pprof "net/http/pprof"
 	"strings"
+	"time"
 )
 
 func Run(ctx context.Context, cfg *config.Config, logger *log.Logger) error {
@@ -76,6 +80,36 @@ func Run(ctx context.Context, cfg *config.Config, logger *log.Logger) error {
 
 	api := http.NewHandler(orderSvc, logger, idem, sgMgr)
 	router := http.NewRouter(api, logger, http.WithAuth(authMW))
+
+	debugMux := httpstd.NewServeMux()
+	debugMux.Handle("/metrics", observability.Handler())
+	debugMux.HandleFunc("/debug/pprof/", pprof.Index)
+	debugMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	debugMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	debugMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	debugMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
+	debugSrv := &httpstd.Server{
+		Addr:              cfg.DebugAddr,
+		Handler:           debugMux,
+		ReadHeaderTimeout: cfg.ReadTimeout,
+		WriteTimeout:      cfg.WriteTimeout,
+		IdleTimeout:       cfg.IdleTimeout,
+		TLSConfig:         &tls.Config{MinVersion: tls.VersionTLS12},
+	}
+	go func() {
+		logger.Info("debug server started", log.Str("addr", debugSrv.Addr))
+		if err := debugSrv.ListenAndServeTLS(cfg.TLSCertFile, cfg.TLSKeyFile); err != nil && !errors.Is(err, httpstd.ErrServerClosed) {
+			logger.Error("debug server error", log.Err(err))
+		}
+	}()
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := debugSrv.Shutdown(ctx); err != nil {
+			logger.Error("debug shutdown error", log.Err(err))
+		}
+	}()
 
 	srv := server.New(router, cfg, logger)
 

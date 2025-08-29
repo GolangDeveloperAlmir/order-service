@@ -14,6 +14,9 @@ type Config struct {
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
 	IdleTimeout  time.Duration
+	TLSCertFile  string
+	TLSKeyFile   string
+	DebugAddr    string
 
 	KafkaBrokers     string
 	KafkaTopicOrders string
@@ -74,6 +77,9 @@ func Load() *Config {
 		ReadTimeout:  mustDur(os.Getenv("READ_TIMEOUT"), 5*time.Second),
 		WriteTimeout: mustDur(os.Getenv("WRITE_TIMEOUT"), 10*time.Second),
 		IdleTimeout:  mustDur(os.Getenv("IDLE_TIMEOUT"), 60*time.Second),
+		TLSCertFile:  getEnv("TLS_CERT", ""),
+		TLSKeyFile:   getEnv("TLS_KEY", ""),
+		DebugAddr:    getEnv("DEBUG_ADDR", ":9090"),
 
 		KafkaBrokers:     getEnv("KAFKA_BROKERS", "localhost:19092"),
 		KafkaTopicOrders: getEnv("KAFKA_TOPIC_ORDERS", "orders"),
